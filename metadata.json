@@ -1,0 +1,6 @@
+{
+  "name": "Il Covo - Gestionale Locale Condiviso",
+  "description": "Piattaforma gestionale e CMS privato per l'organizzazione e la gestione di un locale condiviso tra amici con calendario, richieste, pulizie, finanze, sondaggi e acquisti.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
