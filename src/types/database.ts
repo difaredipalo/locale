@@ -14,7 +14,7 @@ export interface UserProfile {
   last_login_at?: string;
 }
 
-export type NotificationCategory =
+export type NoticeboardCategory =
   | 'Informazione'
   | 'Importante'
   | 'Emergenza'
@@ -23,14 +23,14 @@ export type NotificationCategory =
   | 'Pulizie'
   | 'Economico';
 
-export type NotificationPriority = 'bassa' | 'normale' | 'alta' | 'urgente';
+export type NoticeboardPriority = 'bassa' | 'normale' | 'alta' | 'urgente';
 
 export interface NotificationItem {
   id: string;
   title: string;
   content: string;
-  category: NotificationCategory;
-  priority: NotificationPriority;
+  category: NoticeboardCategory;
+  priority: NoticeboardPriority;
   is_pinned: boolean;
   is_archived: boolean;
   created_by_id: string;
@@ -260,7 +260,8 @@ export type AuditLogCategory =
   | 'user'
   | 'poll'
   | 'purchase'
-  | 'goal';
+  | 'goal'
+  | 'election';
 
 export interface AuditLog {
   id: string;
@@ -270,6 +271,186 @@ export interface AuditLog {
   category: AuditLogCategory;
   action: string;
   details: string;
+}
+
+export type ElectionStatus = 'upcoming' | 'active' | 'closed';
+
+export interface ElectionCandidate {
+  id: string;
+  user_id: string;
+  name: string;
+  manifesto_summary?: string;
+  votes_count: number;
+}
+
+export interface PresidentialElection {
+  id: string;
+  quarter: string; // e.g. "Q4 2026"
+  title: string;
+  term_period: string; // e.g. "1 Ottobre 2026 - 31 Dicembre 2026"
+  description: string;
+  start_date: string;
+  end_date: string;
+  status: ElectionStatus;
+  candidates: ElectionCandidate[];
+  blank_votes: number; // schede bianche
+  voter_ids: string[]; // IDs of users who cast their vote
+  winner_candidate_id?: string;
+  winner_name?: string;
+  created_at: string;
+  closed_at?: string;
+}
+
+// ==========================================
+// MULTI-CHANNEL NOTIFICATION SYSTEM
+// ==========================================
+
+export type NotificationChannel = 'in_app' | 'web_push' | 'telegram' | 'whatsapp' | 'email';
+
+export type NotificationCategory =
+  | 'presence'
+  | 'venue'
+  | 'cleaning'
+  | 'polls'
+  | 'purchases'
+  | 'finances'
+  | 'calendar'
+  | 'admin';
+
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
+
+export type NotificationStatus = 'pending' | 'processing' | 'sent' | 'failed' | 'cancelled';
+
+export type DeliveryStatus = 'pending' | 'sent' | 'failed' | 'skipped';
+
+export interface NotificationDelivery {
+  id: string;
+  notification_id: string;
+  recipient_id: string;
+  recipient_name: string;
+  channel: NotificationChannel;
+  status: DeliveryStatus;
+  attempts: number;
+  max_attempts: number;
+  last_error?: string;
+  sent_at?: string;
+  created_at: string;
+}
+
+export interface MultiChannelNotification {
+  id: string;
+  title: string;
+  message: string;
+  category: NotificationCategory;
+  priority: NotificationPriority;
+  target_type: 'all' | 'role' | 'users';
+  target_role?: UserRole;
+  recipient_ids: string[];
+  channels: NotificationChannel[];
+  status: NotificationStatus;
+  created_by_id?: string;
+  created_by_name?: string;
+  created_at: string;
+  scheduled_at?: string;
+  sent_at?: string;
+  metadata?: Record<string, any>;
+  deliveries?: NotificationDelivery[];
+}
+
+export interface UserNotificationPreference {
+  id: string;
+  user_id: string;
+  channels: {
+    in_app: boolean;
+    web_push: boolean;
+    telegram: boolean;
+    whatsapp: boolean;
+    email: boolean;
+  };
+  categories: {
+    presence: boolean;
+    venue: boolean;
+    cleaning: boolean;
+    polls: boolean;
+    purchases: boolean;
+    calendar: boolean;
+    finances: boolean;
+    admin: boolean;
+  };
+  critical_always_all: boolean;
+  updated_at: string;
+}
+
+export interface PushSubscriptionRecord {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  user_agent?: string;
+  created_at: string;
+}
+
+export interface TelegramConnection {
+  id: string;
+  user_id: string;
+  telegram_user_id?: string;
+  telegram_username?: string;
+  telegram_first_name?: string;
+  verification_token?: string;
+  is_connected: boolean;
+  connected_at?: string;
+}
+
+export interface WhatsAppConnection {
+  id: string;
+  user_id: string;
+  phone_number: string;
+  is_opted_in: boolean;
+  opted_in_at?: string;
+}
+
+export interface NotificationChannelConfig {
+  web_push: {
+    enabled: boolean;
+    public_key: string;
+    private_key: string;
+    subject: string;
+  };
+  telegram: {
+    enabled: boolean;
+    bot_token: string;
+    bot_username: string;
+    webhook_active: boolean;
+  };
+  whatsapp: {
+    enabled: boolean;
+    phone_number_id: string;
+    business_account_id: string;
+    access_token: string;
+    default_template_name: string;
+  };
+  email: {
+    enabled: boolean;
+    from_address: string;
+    smtp_host?: string;
+    smtp_user?: string;
+    smtp_configured: boolean;
+  };
+}
+
+export interface UserPresence {
+  id: string;
+  user_id: string;
+  user_name: string;
+  avatar_url?: string;
+  status: 'active' | 'extended' | 'ended';
+  started_at: string;
+  expected_until: string;
+  ended_at?: string;
+  notes?: string;
 }
 
 export interface DatabaseState {
@@ -283,10 +464,20 @@ export interface DatabaseState {
   regulation_versions: RegulationVersion[];
   purchases: PurchaseItem[];
   goals: FinancialGoal[];
+  elections: PresidentialElection[];
   financial_accounts: {
     initial_bank: number;
     initial_cash: number;
   };
   financial_transactions: FinancialTransaction[];
   audit_logs: AuditLog[];
+  // Multi-channel notification entities
+  notifications_multichannel: MultiChannelNotification[];
+  notification_deliveries: NotificationDelivery[];
+  notification_preferences: UserNotificationPreference[];
+  push_subscriptions: PushSubscriptionRecord[];
+  telegram_connections: TelegramConnection[];
+  whatsapp_connections: WhatsAppConnection[];
+  notification_channel_configs: NotificationChannelConfig;
+  user_presences: UserPresence[];
 }

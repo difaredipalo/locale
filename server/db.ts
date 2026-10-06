@@ -14,8 +14,17 @@ import type {
   PurchaseItem,
   FinancialGoal,
   FinancialTransaction,
-  AuditLog,
   FinancialSummary,
+  PresidentialElection,
+  MultiChannelNotification,
+  NotificationDelivery,
+  UserNotificationPreference,
+  PushSubscriptionRecord,
+  TelegramConnection,
+  WhatsAppConnection,
+  NotificationChannelConfig,
+  UserPresence,
+  AuditLog,
 } from '../src/types/database';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -570,6 +579,260 @@ export function getInitialDatabase(): DatabaseState {
     },
   ];
 
+  const elections: PresidentialElection[] = [
+    {
+      id: 'elect_q4_2026',
+      quarter: 'Q4 2026',
+      title: 'Elezioni Presidenziali Trimestrali - Q4 2026',
+      term_period: '1 Ottobre 2026 - 31 Dicembre 2026',
+      description: 'Consultazione elettorale trimestrale per l elezione del Presidente del Locale de Il Covo. Il voto è personale, segreto e vincolante. Nessun campo di testo libero ammesso per i votanti: seleziona unicamente il tuo candidato o scheda bianca.',
+      start_date: '2026-10-01',
+      end_date: '2026-10-15',
+      status: 'active',
+      candidates: [
+        {
+          id: 'cand_gianluca',
+          user_id: 'usr_gianluca',
+          name: 'Gianluca Busdeez',
+          manifesto_summary: 'Continuità gestionale, trasparenza del fondo cassa e completamento obiettivo frigorifero.',
+          votes_count: 2,
+        },
+        {
+          id: 'cand_marco',
+          user_id: 'usr_marco',
+          name: 'Marco Rossi',
+          manifesto_summary: 'Potenziamento serate sociali, tornei di giochi e ammodernamento impianto audio.',
+          votes_count: 1,
+        },
+        {
+          id: 'cand_sofia',
+          user_id: 'usr_sofia',
+          name: 'Sofia Bianchi',
+          manifesto_summary: 'Ottimizzazione turni di pulizia, accoglienza nuovi soci e sostenibilità delle bollette.',
+          votes_count: 0,
+        },
+      ],
+      blank_votes: 0,
+      voter_ids: ['usr_marco', 'usr_sofia', 'usr_luca'],
+      created_at: '2026-10-01T08:00:00.000Z',
+    },
+    {
+      id: 'elect_q3_2026',
+      quarter: 'Q3 2026',
+      title: 'Elezioni Presidenziali Trimestrali - Q3 2026',
+      term_period: '1 Luglio 2026 - 30 Settembre 2026',
+      description: 'Scrutinio estivo del locale.',
+      start_date: '2026-07-01',
+      end_date: '2026-07-10',
+      status: 'closed',
+      candidates: [
+        {
+          id: 'cand_gianluca_q3',
+          user_id: 'usr_gianluca',
+          name: 'Gianluca Busdeez',
+          votes_count: 3,
+        },
+        {
+          id: 'cand_marco_q3',
+          user_id: 'usr_marco',
+          name: 'Marco Rossi',
+          votes_count: 1,
+        },
+      ],
+      blank_votes: 0,
+      voter_ids: ['usr_gianluca', 'usr_marco', 'usr_sofia', 'usr_luca'],
+      winner_candidate_id: 'cand_gianluca_q3',
+      winner_name: 'Gianluca Busdeez',
+      created_at: '2026-07-01T08:00:00.000Z',
+      closed_at: '2026-07-11T12:00:00.000Z',
+    },
+  ];
+
+  const notification_channel_configs: NotificationChannelConfig = {
+    web_push: {
+      enabled: true,
+      public_key: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjxyWMWyZCE2_d_z5gP5VdJvQfK0w',
+      private_key: 'mock_server_vapid_private_key_secured',
+      subject: 'mailto:admin@covo.local',
+    },
+    telegram: {
+      enabled: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+      bot_token: process.env.TELEGRAM_BOT_TOKEN || '',
+      bot_username: 'IlCovoLocaleBot',
+      webhook_active: true,
+    },
+    whatsapp: {
+      enabled: Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
+      phone_number_id: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
+      business_account_id: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
+      access_token: process.env.WHATSAPP_ACCESS_TOKEN || '',
+      default_template_name: 'covo_alert_v1',
+    },
+    email: {
+      enabled: true,
+      from_address: 'notifiche@covo.local',
+      smtp_configured: false,
+    },
+  };
+
+  const notification_preferences: UserNotificationPreference[] = [
+    {
+      id: 'pref_gianluca',
+      user_id: 'usr_gianluca',
+      channels: { in_app: true, web_push: true, telegram: true, whatsapp: true, email: true },
+      categories: { presence: true, venue: true, cleaning: true, polls: true, purchases: true, calendar: true, finances: true, admin: true },
+      critical_always_all: true,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: 'pref_marco',
+      user_id: 'usr_marco',
+      channels: { in_app: true, web_push: true, telegram: true, whatsapp: false, email: true },
+      categories: { presence: true, venue: true, cleaning: true, polls: true, purchases: true, calendar: true, finances: true, admin: true },
+      critical_always_all: true,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: 'pref_sofia',
+      user_id: 'usr_sofia',
+      channels: { in_app: true, web_push: true, telegram: false, whatsapp: false, email: true },
+      categories: { presence: true, venue: true, cleaning: true, polls: true, purchases: true, calendar: true, finances: false, admin: true },
+      critical_always_all: true,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: 'pref_luca',
+      user_id: 'usr_luca',
+      channels: { in_app: true, web_push: false, telegram: false, whatsapp: false, email: true },
+      categories: { presence: false, venue: true, cleaning: true, polls: true, purchases: true, calendar: true, finances: false, admin: true },
+      critical_always_all: true,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+
+  const push_subscriptions: PushSubscriptionRecord[] = [];
+
+  const telegram_connections: TelegramConnection[] = [
+    {
+      id: 'tg_gianluca',
+      user_id: 'usr_gianluca',
+      telegram_user_id: '123456789',
+      telegram_username: 'gianlubus',
+      telegram_first_name: 'Gianluca',
+      is_connected: true,
+      connected_at: '2026-09-15T10:00:00.000Z',
+    },
+  ];
+
+  const whatsapp_connections: WhatsAppConnection[] = [
+    {
+      id: 'wa_gianluca',
+      user_id: 'usr_gianluca',
+      phone_number: '+393331234567',
+      is_opted_in: true,
+      opted_in_at: '2026-09-15T10:00:00.000Z',
+    },
+  ];
+
+  const user_presences: UserPresence[] = [
+    {
+      id: 'pres_gianluca',
+      user_id: 'usr_gianluca',
+      user_name: 'Gianluca Busdeez',
+      status: 'active',
+      started_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+      expected_until: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+      notes: 'Lavori di manutenzione e controllo cassa',
+    },
+  ];
+
+  const notifications_multichannel: MultiChannelNotification[] = [
+    {
+      id: 'notif_mc_1',
+      title: '🟢 Gianluca è al locale',
+      message: 'Gianluca Busdeez ha confermato la sua presenza al locale con permanenza prevista fino alle 01:30.',
+      category: 'presence',
+      priority: 'normal',
+      target_type: 'all',
+      recipient_ids: ['usr_gianluca', 'usr_marco', 'usr_sofia', 'usr_luca'],
+      channels: ['in_app', 'web_push', 'telegram'],
+      status: 'sent',
+      created_by_id: 'usr_gianluca',
+      created_by_name: 'Gianluca Busdeez',
+      created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+      sent_at: new Date(Date.now() - 44 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'notif_mc_2',
+      title: '🏠 Richiesta utilizzo locale approvata',
+      message: 'La richiesta di prenotazione per la serata di sabato è stata ufficialmente approvata.',
+      category: 'venue',
+      priority: 'high',
+      target_type: 'all',
+      recipient_ids: ['usr_gianluca', 'usr_marco', 'usr_sofia', 'usr_luca'],
+      channels: ['in_app', 'web_push', 'telegram', 'email'],
+      status: 'sent',
+      created_by_id: 'usr_gianluca',
+      created_by_name: 'Gianluca Busdeez',
+      created_at: '2026-10-02T14:30:00.000Z',
+      sent_at: '2026-10-02T14:30:05.000Z',
+    },
+    {
+      id: 'notif_mc_3',
+      title: '⚠️ Importante: orario chiusura anticipato domenica',
+      message: 'Domenica sera il locale dovrà essere lasciato libero e in ordine entro le ore 18:00 per sanificazione straordinaria.',
+      category: 'admin',
+      priority: 'critical',
+      target_type: 'all',
+      recipient_ids: ['usr_gianluca', 'usr_marco', 'usr_sofia', 'usr_luca'],
+      channels: ['in_app', 'web_push', 'telegram', 'whatsapp', 'email'],
+      status: 'sent',
+      created_by_id: 'usr_gianluca',
+      created_by_name: 'Gianluca Busdeez',
+      created_at: '2026-10-03T09:00:00.000Z',
+      sent_at: '2026-10-03T09:00:10.000Z',
+    },
+  ];
+
+  const notification_deliveries: NotificationDelivery[] = [
+    {
+      id: 'deliv_1_inapp',
+      notification_id: 'notif_mc_1',
+      recipient_id: 'usr_marco',
+      recipient_name: 'Marco Rossi',
+      channel: 'in_app',
+      status: 'sent',
+      attempts: 1,
+      max_attempts: 3,
+      sent_at: new Date(Date.now() - 44 * 60 * 1000).toISOString(),
+      created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'deliv_1_tg',
+      notification_id: 'notif_mc_1',
+      recipient_id: 'usr_gianluca',
+      recipient_name: 'Gianluca Busdeez',
+      channel: 'telegram',
+      status: 'sent',
+      attempts: 1,
+      max_attempts: 3,
+      sent_at: new Date(Date.now() - 44 * 60 * 1000).toISOString(),
+      created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'deliv_3_wa',
+      notification_id: 'notif_mc_3',
+      recipient_id: 'usr_gianluca',
+      recipient_name: 'Gianluca Busdeez',
+      channel: 'whatsapp',
+      status: 'sent',
+      attempts: 1,
+      max_attempts: 3,
+      sent_at: '2026-10-03T09:00:08.000Z',
+      created_at: '2026-10-03T09:00:00.000Z',
+    },
+  ];
+
   return {
     users,
     notifications,
@@ -581,9 +844,18 @@ export function getInitialDatabase(): DatabaseState {
     regulation_versions,
     purchases,
     goals,
+    elections,
     financial_accounts,
     financial_transactions,
     audit_logs,
+    notifications_multichannel,
+    notification_deliveries,
+    notification_preferences,
+    push_subscriptions,
+    telegram_connections,
+    whatsapp_connections,
+    notification_channel_configs,
+    user_presences,
   };
 }
 
@@ -600,6 +872,34 @@ class DatabaseManager {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.users)) {
+          const init = getInitialDatabase();
+          if (!parsed.elections || !Array.isArray(parsed.elections)) {
+            parsed.elections = init.elections;
+          }
+          if (!parsed.notifications_multichannel) {
+            parsed.notifications_multichannel = init.notifications_multichannel;
+          }
+          if (!parsed.notification_deliveries) {
+            parsed.notification_deliveries = init.notification_deliveries;
+          }
+          if (!parsed.notification_preferences) {
+            parsed.notification_preferences = init.notification_preferences;
+          }
+          if (!parsed.push_subscriptions) {
+            parsed.push_subscriptions = init.push_subscriptions;
+          }
+          if (!parsed.telegram_connections) {
+            parsed.telegram_connections = init.telegram_connections;
+          }
+          if (!parsed.whatsapp_connections) {
+            parsed.whatsapp_connections = init.whatsapp_connections;
+          }
+          if (!parsed.notification_channel_configs) {
+            parsed.notification_channel_configs = init.notification_channel_configs;
+          }
+          if (!parsed.user_presences) {
+            parsed.user_presences = init.user_presences;
+          }
           return parsed as DatabaseState;
         }
       }

@@ -13,6 +13,13 @@ import type {
   FinancialSummary,
   AuditLog,
   UserRole,
+  PresidentialElection,
+  MultiChannelNotification,
+  NotificationDelivery,
+  UserNotificationPreference,
+  NotificationChannelConfig,
+  UserPresence,
+  NotificationChannel,
 } from '../types/database';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -237,6 +244,158 @@ export const api = {
 
   // Audit Logs
   getAuditLogs: () => fetchJson<AuditLog[]>('/api/audit-logs'),
+
+  // Presidential Elections
+  getElections: () => fetchJson<PresidentialElection[]>('/api/elections'),
+
+  createElection: (payload: {
+    quarter: string;
+    title: string;
+    term_period: string;
+    description?: string;
+    start_date?: string;
+    end_date?: string;
+    candidates: { user_id: string; name: string; manifesto_summary?: string }[];
+    created_by_id?: string;
+    created_by_name?: string;
+  }) =>
+    fetchJson<PresidentialElection>('/api/elections', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  voteElection: (electionId: string, payload: { user_id: string; user_name: string; candidate_id: string }) =>
+    fetchJson<PresidentialElection>(`/api/elections/${electionId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  closeElection: (electionId: string, payload: { closed_by_id: string; closed_by_name: string }) =>
+    fetchJson<PresidentialElection>(`/api/elections/${electionId}/close`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  // Multi-Channel Notification Center
+  getNotificationCenterData: () =>
+    fetchJson<{
+      notifications: MultiChannelNotification[];
+      deliveries: NotificationDelivery[];
+      stats: { total_notifications: number; sent_deliveries: number; failed_deliveries: number; pending_deliveries: number };
+    }>('/api/notifications/center'),
+
+  broadcastNotification: (payload: {
+    title: string;
+    message: string;
+    category: string;
+    priority: string;
+    target_type: string;
+    target_role?: string;
+    target_user_ids?: string[];
+    channels?: NotificationChannel[];
+    scheduled_at?: string;
+    actor_id?: string;
+    actor_name?: string;
+  }) =>
+    fetchJson<MultiChannelNotification>('/api/notifications/center/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  retryDelivery: (deliveryId: string) =>
+    fetchJson<NotificationDelivery>(`/api/notifications/deliveries/${deliveryId}/retry`, {
+      method: 'POST',
+    }),
+
+  getUserNotificationPreferences: (userId: string) =>
+    fetchJson<UserNotificationPreference>(`/api/notifications/preferences/${userId}`),
+
+  updateUserNotificationPreferences: (userId: string, payload: Partial<UserNotificationPreference>) =>
+    fetchJson<UserNotificationPreference>(`/api/notifications/preferences/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  getNotificationChannelConfig: () =>
+    fetchJson<{
+      web_push: { enabled: boolean; public_key: string; subject: string; has_private_key: boolean };
+      telegram: { enabled: boolean; bot_username: string; webhook_active: boolean; has_bot_token: boolean };
+      whatsapp: { enabled: boolean; phone_number_id: string; business_account_id: string; default_template_name: string; has_access_token: boolean };
+      email: { enabled: boolean; from_address: string; smtp_configured: boolean };
+    }>('/api/notifications/config'),
+
+  updateNotificationChannelConfig: (payload: any) =>
+    fetchJson<{ message: string }>('/api/notifications/config', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  testNotificationChannel: (channel: NotificationChannel, recipient_id: string) =>
+    fetchJson<{ message: string; notification: MultiChannelNotification }>('/api/notifications/test-channel', {
+      method: 'POST',
+      body: JSON.stringify({ channel, recipient_id }),
+    }),
+
+  // Web Push
+  getWebPushPublicKey: () => fetchJson<{ publicKey: string }>('/api/notifications/web-push/public-key'),
+
+  subscribeWebPush: (user_id: string, subscription: any, user_agent?: string) =>
+    fetchJson<{ success: boolean; message: string }>('/api/notifications/web-push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ user_id, subscription, user_agent }),
+    }),
+
+  unsubscribeWebPush: (endpoint: string) =>
+    fetchJson<{ success: boolean }>('/api/notifications/web-push/unsubscribe', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
+
+  // Telegram Linking
+  getTelegramToken: (user_id: string) =>
+    fetchJson<{ token: string; deepLink: string; botUsername: string }>('/api/notifications/telegram/token', {
+      method: 'POST',
+      body: JSON.stringify({ user_id }),
+    }),
+
+  simulateTelegramLink: (user_id: string, telegram_username?: string) =>
+    fetchJson<{ success: boolean; connection: any }>('/api/notifications/telegram/simulate-link', {
+      method: 'POST',
+      body: JSON.stringify({ user_id, telegram_username }),
+    }),
+
+  disconnectTelegram: (user_id: string) =>
+    fetchJson<{ success: boolean; message: string }>('/api/notifications/telegram/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ user_id }),
+    }),
+
+  // WhatsApp Opt-in
+  optInWhatsApp: (user_id: string, phone_number: string, is_opted_in: boolean) =>
+    fetchJson<{ success: boolean; connection: any }>('/api/notifications/whatsapp/opt-in', {
+      method: 'POST',
+      body: JSON.stringify({ user_id, phone_number, is_opted_in }),
+    }),
+
+  // Presences ("Sono al Locale")
+  getPresences: () => fetchJson<UserPresence[]>('/api/presences'),
+
+  startPresence: (payload: { user_id: string; user_name: string; expected_hours?: number; expected_until?: string; notes?: string }) =>
+    fetchJson<UserPresence>('/api/presences', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  extendPresence: (id: string, payload: { extra_hours?: number; new_expected_until?: string }) =>
+    fetchJson<UserPresence>(`/api/presences/${id}/extend`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  endPresence: (id: string) =>
+    fetchJson<UserPresence>(`/api/presences/${id}/end`, {
+      method: 'PUT',
+    }),
 
   // Seed / Reset
   resetDatabase: () => fetchJson<{ message: string }>('/api/database/seed', { method: 'POST' }),

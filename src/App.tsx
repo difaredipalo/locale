@@ -22,6 +22,7 @@ import { UsersManagementPage } from './pages/UsersManagementPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SupabaseGuidePage } from './pages/SupabaseGuidePage';
+import { ElectionsPage } from './pages/ElectionsPage';
 
 import type {
   CalendarEvent,
@@ -36,6 +37,7 @@ import type {
   PurchaseItem,
   FinancialTransaction,
   AuditLog,
+  PresidentialElection,
 } from './types/database';
 import { api } from './lib/api';
 
@@ -55,6 +57,7 @@ function MainApp() {
   const [regulationSections, setRegulationSections] = useState<RegulationSection[]>([]);
   const [regulationVersions, setRegulationVersions] = useState<RegulationVersion[]>([]);
   const [purchases, setPurchases] = useState<PurchaseItem[]>([]);
+  const [elections, setElections] = useState<PresidentialElection[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(true);
 
@@ -73,6 +76,7 @@ function MainApp() {
         regs,
         prchs,
         logs,
+        elects,
       ] = await Promise.all([
         api.getEvents(),
         api.getCleaningShifts(),
@@ -85,6 +89,7 @@ function MainApp() {
         api.getRegulations(),
         api.getPurchases(),
         api.getAuditLogs(),
+        api.getElections(),
       ]);
 
       setEvents(evts);
@@ -99,6 +104,7 @@ function MainApp() {
       setRegulationVersions(regs.versions);
       setPurchases(prchs);
       setAuditLogs(logs);
+      setElections(elects);
     } catch (err) {
       console.error('Error loading initial app data:', err);
     } finally {
@@ -147,6 +153,7 @@ function MainApp() {
           financialSummary={financialSummary}
           polls={polls}
           venueRequests={venueRequests}
+          elections={elections}
           onNavigate={setActiveTab}
           onVotePoll={async (pollId, optionId) => {
             try {
@@ -224,7 +231,22 @@ function MainApp() {
         />
       )}
 
-      {/* 6. SONDAGGI */}
+      {/* 6. ELEZIONI PRESIDENTE DEL LOCALE */}
+      {activeTab === 'elections' && (
+        <ElectionsPage
+          elections={elections}
+          onElectionUpdated={(updated) => {
+            setElections(elections.map(e => (e.id === updated.id ? updated : e)));
+            loadAllData();
+          }}
+          onElectionCreated={(created) => {
+            setElections([created, ...elections]);
+            loadAllData();
+          }}
+        />
+      )}
+
+      {/* 7. SONDAGGI */}
       {activeTab === 'polls' && (
         <PollsPage
           polls={polls}

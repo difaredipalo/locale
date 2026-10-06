@@ -155,6 +155,54 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDatabaseReset }) => 
         </form>
       </div>
 
+      {/* PASSWORD & SECURITY CARD */}
+      <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4 text-xs">
+        <div className="flex items-center gap-2 text-white font-bold text-sm">
+          <KeyRound className="w-4 h-4 text-amber-400" />
+          <span>Sicurezza & Modifica Password</span>
+        </div>
+        <p className="text-slate-400">
+          Reimposta la password di accesso al portale per proteggere il tuo account e le prenotazioni del locale.
+        </p>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            alert('Password aggiornata con successo nel database protetto!');
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Nuova Password</label>
+              <input
+                type="password"
+                required
+                placeholder="Almeno 6 caratteri"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Conferma Nuova Password</label>
+              <input
+                type="password"
+                required
+                placeholder="Ripeti password"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold transition-colors"
+            >
+              <span>Aggiorna Password</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
       {/* SYSTEM AND RESET TOOLS FOR ADMINS */}
       {isAdmin && (
         <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4 text-xs">

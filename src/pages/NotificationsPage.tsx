@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import type {
   NotificationItem,
-  NotificationCategory,
-  NotificationPriority,
+  NoticeboardCategory,
+  NoticeboardPriority,
 } from '../types/database';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
@@ -39,13 +39,13 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
   // Form states
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState<NotificationCategory>('Informazione');
-  const [priority, setPriority] = useState<NotificationPriority>('normale');
+  const [category, setCategory] = useState<NoticeboardCategory>('Informazione');
+  const [priority, setPriority] = useState<NoticeboardPriority>('normale');
   const [isPinned, setIsPinned] = useState(false);
   const [expiresAt, setExpiresAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const categories: NotificationCategory[] = [
+  const categories: NoticeboardCategory[] = [
     'Informazione',
     'Importante',
     'Emergenza',
@@ -296,7 +296,7 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
                   <label className="block text-slate-300 font-medium mb-1">Categoria *</label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value as NotificationCategory)}
+                    onChange={(e) => setCategory(e.target.value as NoticeboardCategory)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
                   >
                     {categories.map(c => (
@@ -308,7 +308,7 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
                   <label className="block text-slate-300 font-medium mb-1">Priorità *</label>
                   <select
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value as NotificationPriority)}
+                    onChange={(e) => setPriority(e.target.value as NoticeboardPriority)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
                   >
                     <option value="bassa">Bassa</option>

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from './db';
+import { notificationService } from './notificationService';
 import type {
   CalendarEvent,
   VenueRequest,
@@ -12,6 +13,14 @@ import type {
   FinancialGoal,
   FinancialTransaction,
   UserProfile,
+  PresidentialElection,
+  ElectionCandidate,
+  MultiChannelNotification,
+  UserPresence,
+  NotificationChannelConfig,
+  UserNotificationPreference,
+  NotificationChannel,
+  PushSubscriptionRecord,
 } from '../src/types/database';
 
 export const apiRouter = Router();
@@ -304,6 +313,17 @@ apiRouter.post('/events', (req: Request, res: Response) => {
     details: `Evento creato: "${newEvent.title}" il ${newEvent.date} (${newEvent.start_time} - ${newEvent.end_time})`,
   });
 
+  notificationService.emitEvent({
+    type: 'CALENDAR_EVENT_CREATED',
+    category: 'calendar',
+    priority: 'normal',
+    title: '📅 Nuovo evento aggiunto al calendario',
+    message: `È stato programmato un nuovo evento: "${newEvent.title}" per il ${newEvent.date} dalle ore ${newEvent.start_time} alle ${newEvent.end_time}.`,
+    target_type: 'all',
+    actor_id: newEvent.created_by_id,
+    actor_name: newEvent.created_by_name,
+  });
+
   res.status(201).json(newEvent);
 });
 
@@ -471,6 +491,19 @@ apiRouter.put('/venue-requests/:id/review', (req: Request, res: Response) => {
       action: 'Approvazione utilizzo locale',
       details: `Approvata richiesta di ${request.user_name} per il ${request.date} (${request.start_time}-${request.end_time})`,
     });
+
+    // Multi-channel notification: Approved
+    notificationService.emitEvent({
+      type: 'VENUE_REQUEST_APPROVED',
+      category: 'venue',
+      priority: 'high',
+      title: '🏠 La tua richiesta di utilizzo del locale è stata approvata',
+      message: `La tua richiesta di utilizzo per il ${request.date} (${request.start_time} - ${request.end_time}) è stata approvata da ${reviewer_name || 'Amministrazione'}. L'evento è ora presente in calendario.`,
+      target_type: 'users',
+      target_user_ids: [request.user_id],
+      actor_id: reviewer_id,
+      actor_name: reviewer_name,
+    });
   } else if (action === 'reject') {
     request.status = 'rejected';
     request.rejection_reason = rejection_reason || 'Nessuna motivazione specificata';
@@ -499,6 +532,19 @@ apiRouter.put('/venue-requests/:id/review', (req: Request, res: Response) => {
       category: 'venue',
       action: 'Rifiuto utilizzo locale',
       details: `Rifiutata richiesta di ${request.user_name} del ${request.date}. Motivo: ${request.rejection_reason}`,
+    });
+
+    // Multi-channel notification: Rejected
+    notificationService.emitEvent({
+      type: 'VENUE_REQUEST_REJECTED',
+      category: 'venue',
+      priority: 'high',
+      title: '❌ La tua richiesta di utilizzo del locale è stata rifiutata',
+      message: `La tua richiesta per il ${request.date} non è stata accolta.${request.rejection_reason ? ` Motivo: ${request.rejection_reason}` : ''}`,
+      target_type: 'users',
+      target_user_ids: [request.user_id],
+      actor_id: reviewer_id,
+      actor_name: reviewer_name,
     });
   } else {
     request.status = 'cancelled';
@@ -571,6 +617,16 @@ apiRouter.post('/cleaning-shifts', (req: Request, res: Response) => {
     category: 'cleaning',
     action: 'Assegnazione turno pulizia',
     details: `Turno di pulizia assegnato a ${assigned_user_name} per il giorno ${date} alle ${time}`,
+  });
+
+  notificationService.emitEvent({
+    type: 'CLEANING_SHIFT_ASSIGNED',
+    category: 'cleaning',
+    priority: 'normal',
+    title: '🧹 Ti è stato assegnato un turno di pulizia',
+    message: `Ciao ${assigned_user_name}, ti è stato assegnato un turno di pulizia per ${date} alle ore ${time}.`,
+    target_type: 'users',
+    target_user_ids: [assigned_user_id],
   });
 
   res.status(201).json(newShift);
@@ -686,6 +742,17 @@ apiRouter.post('/polls', (req: Request, res: Response) => {
     category: 'poll',
     action: 'Creazione sondaggio',
     details: `Sondaggio creato: "${newPoll.question}"`,
+  });
+
+  notificationService.emitEvent({
+    type: 'POLL_CREATED',
+    category: 'polls',
+    priority: 'normal',
+    title: '📊 Nuovo sondaggio disponibile',
+    message: `È stato aperto un nuovo sondaggio: "${newPoll.question}". Accedi al portale per esprimere la tua preferenza.`,
+    target_type: 'all',
+    actor_id: newPoll.created_by_id,
+    actor_name: newPoll.created_by_name,
   });
 
   res.status(201).json(newPoll);
@@ -987,6 +1054,18 @@ apiRouter.post('/goals/:id/contribute', (req: Request, res: Response) => {
     details: `Versati €${val} per "${goal.title}" da parte di ${user_name}. Totale raccolto: €${goal.collected_amount}/${goal.target_amount}`,
   });
 
+  const percent = Math.min(100, Math.round((goal.collected_amount / goal.target_amount) * 100));
+  notificationService.emitEvent({
+    type: 'GOAL_PROGRESS_UPDATED',
+    category: 'purchases',
+    priority: goal.is_completed ? 'high' : 'normal',
+    title: goal.is_completed ? `🎉 Obiettivo completato: ${goal.title}` : `🎯 Aggiornamento obiettivo: ${goal.title}`,
+    message: goal.is_completed
+      ? `L'obiettivo "${goal.title}" ha raggiunto il 100% (€${goal.collected_amount} su €${goal.target_amount}) grazie al contributo di ${user_name}!`
+      : `L'obiettivo "${goal.title}" è arrivato al ${percent}% (€${goal.collected_amount} su €${goal.target_amount}).`,
+    target_type: 'all',
+  });
+
   res.json(goal);
 });
 
@@ -1037,6 +1116,20 @@ apiRouter.post('/finances/transactions', (req: Request, res: Response) => {
     details: `Ha registrato un'${newTx.type === 'income' ? 'entrata' : 'uscita'} di €${newTx.amount}. Categoria: ${newTx.category}. Metodo: ${newTx.method === 'bank' ? 'Banca' : 'Cassa'}. Descrizione: ${newTx.description}`,
   });
 
+  if (newTx.type === 'expense') {
+    notificationService.emitEvent({
+      type: 'FINANCIAL_EXPENSE_RECORDED',
+      category: 'finances',
+      priority: 'high',
+      title: '💰 Nuova uscita di cassa registrata',
+      message: `È stata registrata una nuova uscita di €${newTx.amount} per: "${newTx.description}" (${newTx.category}) da ${newTx.recorded_by_name}.`,
+      target_type: 'role',
+      target_role: 'admin',
+      actor_id: newTx.recorded_by_id,
+      actor_name: newTx.recorded_by_name,
+    });
+  }
+
   res.status(201).json({
     transaction: newTx,
     summary: db.getFinancialSummary(),
@@ -1053,7 +1146,721 @@ apiRouter.get('/audit-logs', (_req: Request, res: Response) => {
 });
 
 // ==========================================
-// 12. DATABASE SEED / RESET
+// 12. PRESIDENTIAL ELECTIONS (ELEZIONI TRIMESTRALI PRESIDENTE)
+// ==========================================
+
+apiRouter.get('/elections', (_req: Request, res: Response) => {
+  const state = db.getState();
+  res.json(state.elections || []);
+});
+
+apiRouter.post('/elections', (req: Request, res: Response) => {
+  const { quarter, title, term_period, description, start_date, end_date, candidates, created_by_id, created_by_name } = req.body;
+  if (!quarter || !title || !term_period || !Array.isArray(candidates) || candidates.length < 2) {
+    return res.status(400).json({ error: 'Trimestre, titolo, periodo e almeno 2 candidati obbligatori.' });
+  }
+
+  const newElection: PresidentialElection = {
+    id: `elect_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    quarter,
+    title,
+    term_period,
+    description: description || 'Elezioni trimestrali per la carica di Presidente del Locale.',
+    start_date: start_date || new Date().toISOString().split('T')[0],
+    end_date: end_date || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+    status: 'active',
+    candidates: candidates.map((c: { user_id: string; name: string; manifesto_summary?: string }, idx: number) => ({
+      id: `cand_${idx + 1}_${Date.now()}`,
+      user_id: c.user_id,
+      name: c.name,
+      manifesto_summary: c.manifesto_summary,
+      votes_count: 0,
+    })),
+    blank_votes: 0,
+    voter_ids: [],
+    created_at: new Date().toISOString(),
+  };
+
+  const state = db.getState();
+  if (!state.elections) state.elections = [];
+  state.elections.unshift(newElection);
+
+  // Notify members
+  state.notifications.unshift({
+    id: `notif_${Date.now()}`,
+    title: `Aperte le Elezioni Presidenziali ${quarter} 🗳️`,
+    content: `Si aprono ufficialmente le elezioni trimestrali per il Presidente de Il Covo (${term_period}). Accedi alla sezione Elezioni per depositare la tua scheda nell'urna.`,
+    category: 'Importante',
+    priority: 'alta',
+    is_pinned: true,
+    is_archived: false,
+    created_by_id: created_by_id || 'usr_admin',
+    created_by_name: created_by_name || 'Commissione Elettorale',
+    created_at: new Date().toISOString(),
+    read_by: [],
+  });
+
+  db.save();
+
+  db.addAuditLog({
+    user_id: created_by_id || 'usr_admin',
+    user_name: created_by_name || 'Amministratore',
+    category: 'election',
+    action: 'Indizione elezioni presidenziali',
+    details: `Indette elezioni per il trimestre ${quarter}: "${title}" con ${candidates.length} candidati ammessi`,
+  });
+
+  res.status(201).json(newElection);
+});
+
+apiRouter.post('/elections/:id/vote', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { user_id, user_name, candidate_id } = req.body;
+  if (!user_id || !candidate_id) {
+    return res.status(400).json({ error: 'Identificativo utente e scelta di voto obbligatori.' });
+  }
+
+  const state = db.getState();
+  const election = (state.elections || []).find(e => e.id === id);
+  if (!election) return res.status(404).json({ error: 'Elezione non trovata.' });
+
+  if (election.status !== 'active') {
+    return res.status(400).json({ error: 'Il seggio elettorale per questa tornata è chiuso.' });
+  }
+
+  // Strictly enforce single vote per user
+  if (election.voter_ids.includes(user_id)) {
+    return res.status(400).json({ error: 'Hai già espresso il tuo voto per questa tornata elettorale. La tua scheda è già stata depositata nell urna.' });
+  }
+
+  // Register voter ID to prevent double voting
+  election.voter_ids.push(user_id);
+
+  // Secret tally
+  if (candidate_id === 'blank') {
+    election.blank_votes += 1;
+  } else {
+    const cand = election.candidates.find(c => c.id === candidate_id);
+    if (!cand) {
+      return res.status(404).json({ error: 'Candidato non valido.' });
+    }
+    cand.votes_count += 1;
+  }
+
+  db.save();
+
+  db.addAuditLog({
+    user_id,
+    user_name: user_name || 'Socio',
+    category: 'election',
+    action: 'Voto depositato',
+    details: `Il socio ha depositato regolarmente la propria scheda nell'urna per le ${election.title} (Voto segreto tutelato)`,
+  });
+
+  res.json(election);
+});
+
+apiRouter.put('/elections/:id/close', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { closed_by_id, closed_by_name } = req.body;
+  const state = db.getState();
+  const election = (state.elections || []).find(e => e.id === id);
+  if (!election) return res.status(404).json({ error: 'Elezione non trovata.' });
+
+  election.status = 'closed';
+  election.closed_at = new Date().toISOString();
+
+  // Determine winner with most votes
+  let maxVotes = -1;
+  let winner: ElectionCandidate | null = null;
+  for (const c of election.candidates) {
+    if (c.votes_count > maxVotes) {
+      maxVotes = c.votes_count;
+      winner = c;
+    }
+  }
+
+  if (winner) {
+    election.winner_candidate_id = winner.id;
+    election.winner_name = winner.name;
+  }
+
+  // Official victory proclamation notification
+  state.notifications.unshift({
+    id: `notif_${Date.now()}`,
+    title: `Proclamazione Presidente: ${winner ? winner.name : 'Scrutinio Concluso'} 🎉`,
+    content: `Si sono concluse le ${election.title}. Con ${winner ? `${winner.votes_count} voti favorevoli` : 'scrutinio completato'}, ${winner ? `${winner.name} è proclamato Presidente del Locale` : 'le elezioni si sono chiuse'} per il periodo ${election.term_period}.`,
+    category: 'Importante',
+    priority: 'alta',
+    is_pinned: true,
+    is_archived: false,
+    created_by_id: closed_by_id || 'usr_admin',
+    created_by_name: closed_by_name || 'Commissione Elettorale',
+    created_at: new Date().toISOString(),
+    read_by: [],
+  });
+
+  db.save();
+
+  db.addAuditLog({
+    user_id: closed_by_id || 'usr_admin',
+    user_name: closed_by_name || 'Amministratore',
+    category: 'election',
+    action: 'Chiusura seggio e proclamazione',
+    details: `Concluse ${election.title}. Presidente eletto: ${winner?.name || 'N/A'} con ${winner?.votes_count || 0} voti su ${election.voter_ids.length} votanti totali`,
+  });
+
+  res.json(election);
+});
+
+// ==========================================
+// 13. MULTI-CHANNEL NOTIFICATION CENTER
+// ==========================================
+
+apiRouter.get('/notifications/center', (_req: Request, res: Response) => {
+  const state = db.getState();
+  const notifications = state.notifications_multichannel || [];
+  const deliveries = state.notification_deliveries || [];
+
+  const stats = {
+    total_notifications: notifications.length,
+    sent_deliveries: deliveries.filter(d => d.status === 'sent').length,
+    failed_deliveries: deliveries.filter(d => d.status === 'failed').length,
+    pending_deliveries: deliveries.filter(d => d.status === 'pending').length,
+  };
+
+  res.json({ notifications, deliveries, stats });
+});
+
+apiRouter.post('/notifications/center/broadcast', async (req: Request, res: Response) => {
+  const {
+    title,
+    message,
+    category,
+    priority,
+    target_type,
+    target_role,
+    target_user_ids,
+    channels,
+    scheduled_at,
+    actor_id,
+    actor_name,
+  } = req.body;
+
+  if (!title || !message) {
+    return res.status(400).json({ error: 'Titolo e messaggio sono obbligatori.' });
+  }
+
+  try {
+    const created = await notificationService.emitEvent({
+      type: 'MANUAL_ADMIN_BROADCAST',
+      category: category || 'admin',
+      priority: priority || 'normal',
+      title,
+      message,
+      target_type: target_type || 'all',
+      target_role,
+      target_user_ids,
+      scheduled_at,
+      actor_id,
+      actor_name,
+      channels_override: channels,
+    });
+
+    db.addAuditLog({
+      user_id: actor_id || 'usr_admin',
+      user_name: actor_name || 'Amministratore',
+      category: 'user',
+      action: 'Invio notifica multi-canale',
+      details: `Notifica trasmessa: "${title}" (Priorità: ${priority}, Target: ${target_type})`,
+    });
+
+    res.status(201).json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Errore durante la trasmissione della notifica' });
+  }
+});
+
+apiRouter.post('/notifications/deliveries/:id/retry', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const updated = await notificationService.retryDelivery(id);
+    if (!updated) {
+      return res.status(404).json({ error: 'Invio non trovato.' });
+    }
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Errore retry consegna' });
+  }
+});
+
+// User Notification Preferences
+apiRouter.get('/notifications/preferences/:userId', (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const state = db.getState();
+  let pref = (state.notification_preferences || []).find(p => p.user_id === userId);
+
+  if (!pref) {
+    // Generate default preferences for user
+    pref = {
+      id: `pref_${userId}`,
+      user_id: userId,
+      channels: { in_app: true, web_push: true, telegram: true, whatsapp: false, email: true },
+      categories: {
+        presence: true,
+        venue: true,
+        cleaning: true,
+        polls: true,
+        purchases: true,
+        calendar: true,
+        finances: false,
+        admin: true,
+      },
+      critical_always_all: true,
+      updated_at: new Date().toISOString(),
+    };
+    if (!state.notification_preferences) state.notification_preferences = [];
+    state.notification_preferences.push(pref);
+    db.save();
+  }
+
+  res.json(pref);
+});
+
+apiRouter.put('/notifications/preferences/:userId', (req: Request, res: Response) => {
+  const { userId } = req.params;
+  const { channels, categories, critical_always_all } = req.body;
+  const state = db.getState();
+
+  let pref = (state.notification_preferences || []).find(p => p.user_id === userId);
+  if (!pref) {
+    pref = {
+      id: `pref_${userId}`,
+      user_id: userId,
+      channels: channels || { in_app: true, web_push: true, telegram: true, whatsapp: false, email: true },
+      categories: categories || {
+        presence: true,
+        venue: true,
+        cleaning: true,
+        polls: true,
+        purchases: true,
+        calendar: true,
+        finances: false,
+        admin: true,
+      },
+      critical_always_all: critical_always_all ?? true,
+      updated_at: new Date().toISOString(),
+    };
+    if (!state.notification_preferences) state.notification_preferences = [];
+    state.notification_preferences.push(pref);
+  } else {
+    if (channels) pref.channels = { ...pref.channels, ...channels };
+    if (categories) pref.categories = { ...pref.categories, ...categories };
+    if (critical_always_all !== undefined) pref.critical_always_all = critical_always_all;
+    pref.updated_at = new Date().toISOString();
+  }
+
+  db.save();
+  res.json(pref);
+});
+
+// Admin Notification Channels Configuration
+apiRouter.get('/notifications/config', (_req: Request, res: Response) => {
+  const state = db.getState();
+  const cfg = state.notification_channel_configs;
+  
+  // Return masked version so sensitive access tokens are not fully exposed to client
+  const safeConfig = {
+    web_push: {
+      enabled: cfg.web_push?.enabled ?? true,
+      public_key: cfg.web_push?.public_key || '',
+      subject: cfg.web_push?.subject || 'mailto:admin@covo.local',
+      has_private_key: Boolean(cfg.web_push?.private_key),
+    },
+    telegram: {
+      enabled: cfg.telegram?.enabled ?? false,
+      bot_username: cfg.telegram?.bot_username || 'IlCovoLocaleBot',
+      webhook_active: cfg.telegram?.webhook_active ?? false,
+      has_bot_token: Boolean(cfg.telegram?.bot_token),
+    },
+    whatsapp: {
+      enabled: cfg.whatsapp?.enabled ?? false,
+      phone_number_id: cfg.whatsapp?.phone_number_id || '',
+      business_account_id: cfg.whatsapp?.business_account_id || '',
+      default_template_name: cfg.whatsapp?.default_template_name || 'covo_alert_v1',
+      has_access_token: Boolean(cfg.whatsapp?.access_token),
+    },
+    email: {
+      enabled: cfg.email?.enabled ?? true,
+      from_address: cfg.email?.from_address || 'notifiche@covo.local',
+      smtp_configured: cfg.email?.smtp_configured ?? false,
+    },
+  };
+
+  res.json(safeConfig);
+});
+
+apiRouter.put('/notifications/config', (req: Request, res: Response) => {
+  const { web_push, telegram, whatsapp, email } = req.body;
+  const state = db.getState();
+  const cfg = state.notification_channel_configs;
+
+  if (web_push) {
+    cfg.web_push = {
+      ...cfg.web_push,
+      enabled: web_push.enabled !== undefined ? web_push.enabled : cfg.web_push.enabled,
+      public_key: web_push.public_key || cfg.web_push.public_key,
+      private_key: web_push.private_key || cfg.web_push.private_key,
+      subject: web_push.subject || cfg.web_push.subject,
+    };
+  }
+
+  if (telegram) {
+    cfg.telegram = {
+      ...cfg.telegram,
+      enabled: telegram.enabled !== undefined ? telegram.enabled : cfg.telegram.enabled,
+      bot_token: telegram.bot_token || cfg.telegram.bot_token,
+      bot_username: telegram.bot_username || cfg.telegram.bot_username,
+      webhook_active: telegram.webhook_active !== undefined ? telegram.webhook_active : cfg.telegram.webhook_active,
+    };
+  }
+
+  if (whatsapp) {
+    cfg.whatsapp = {
+      ...cfg.whatsapp,
+      enabled: whatsapp.enabled !== undefined ? whatsapp.enabled : cfg.whatsapp.enabled,
+      phone_number_id: whatsapp.phone_number_id || cfg.whatsapp.phone_number_id,
+      business_account_id: whatsapp.business_account_id || cfg.whatsapp.business_account_id,
+      access_token: whatsapp.access_token || cfg.whatsapp.access_token,
+      default_template_name: whatsapp.default_template_name || cfg.whatsapp.default_template_name,
+    };
+  }
+
+  if (email) {
+    cfg.email = {
+      ...cfg.email,
+      enabled: email.enabled !== undefined ? email.enabled : cfg.email.enabled,
+      from_address: email.from_address || cfg.email.from_address,
+      smtp_configured: email.smtp_configured !== undefined ? email.smtp_configured : cfg.email.smtp_configured,
+    };
+  }
+
+  db.save();
+
+  db.addAuditLog({
+    user_id: 'usr_admin',
+    user_name: 'Amministratore',
+    category: 'user',
+    action: 'Aggiornamento canali notifiche',
+    details: 'Modificata configurazione canali notifiche (Web Push / Telegram / WhatsApp / Email)',
+  });
+
+  res.json({ message: 'Configurazione salvata con successo.' });
+});
+
+// Test dispatch to a single channel
+apiRouter.post('/notifications/test-channel', async (req: Request, res: Response) => {
+  const { channel, recipient_id } = req.body as { channel: NotificationChannel; recipient_id: string };
+  const state = db.getState();
+  const recipient = state.users.find(u => u.id === recipient_id) || state.users[0];
+
+  try {
+    const notif = await notificationService.emitEvent({
+      type: 'CHANNEL_TEST_ALERT',
+      category: 'admin',
+      priority: 'high',
+      title: `🔔 Test Connettività: Canale ${channel.toUpperCase()}`,
+      message: `Questo è un messaggio di test inviato alle ${new Date().toLocaleTimeString('it-IT')} dal Notification Service de Il Covo per verificare la corretta consegna.`,
+      target_type: 'users',
+      target_user_ids: [recipient.id],
+      channels_override: [channel],
+    });
+
+    res.json({ message: `Test inviato sul canale ${channel}.`, notification: notif });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Errore durante l invio del test' });
+  }
+});
+
+// Web Push VAPID Public Key & Subscription
+apiRouter.get('/notifications/web-push/public-key', (_req: Request, res: Response) => {
+  const state = db.getState();
+  const key = state.notification_channel_configs?.web_push?.public_key || '';
+  res.json({ publicKey: key });
+});
+
+apiRouter.post('/notifications/web-push/subscribe', (req: Request, res: Response) => {
+  const { user_id, subscription, user_agent } = req.body;
+  if (!user_id || !subscription?.endpoint) {
+    return res.status(400).json({ error: 'Dati di subscription mancanti.' });
+  }
+
+  const state = db.getState();
+  if (!state.push_subscriptions) state.push_subscriptions = [];
+
+  const existingIdx = state.push_subscriptions.findIndex(
+    s => s.endpoint === subscription.endpoint
+  );
+
+  const subRecord: PushSubscriptionRecord = {
+    id: `push_sub_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    user_id,
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: subscription.keys?.p256dh || '',
+      auth: subscription.keys?.auth || '',
+    },
+    user_agent,
+    created_at: new Date().toISOString(),
+  };
+
+  if (existingIdx !== -1) {
+    state.push_subscriptions[existingIdx] = subRecord;
+  } else {
+    state.push_subscriptions.push(subRecord);
+  }
+
+  db.save();
+  res.status(201).json({ success: true, message: 'Dispositivo registrato con successo alle Notifiche Push!' });
+});
+
+apiRouter.delete('/notifications/web-push/unsubscribe', (req: Request, res: Response) => {
+  const { endpoint } = req.body;
+  const state = db.getState();
+  if (state.push_subscriptions) {
+    state.push_subscriptions = state.push_subscriptions.filter(s => s.endpoint !== endpoint);
+    db.save();
+  }
+  res.json({ success: true });
+});
+
+// Telegram Account Linking Flow
+apiRouter.post('/notifications/telegram/token', (req: Request, res: Response) => {
+  const { user_id } = req.body;
+  const state = db.getState();
+  const token = `covo_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  if (!state.telegram_connections) state.telegram_connections = [];
+  let conn = state.telegram_connections.find(c => c.user_id === user_id);
+
+  if (!conn) {
+    conn = {
+      id: `tg_conn_${user_id}`,
+      user_id,
+      verification_token: token,
+      is_connected: false,
+    };
+    state.telegram_connections.push(conn);
+  } else {
+    conn.verification_token = token;
+  }
+
+  db.save();
+
+  const botUsername = state.notification_channel_configs?.telegram?.bot_username || 'IlCovoLocaleBot';
+  const deepLink = `https://t.me/${botUsername}?start=${token}`;
+
+  res.json({ token, deepLink, botUsername });
+});
+
+apiRouter.post('/notifications/telegram/simulate-link', (req: Request, res: Response) => {
+  const { user_id, telegram_username } = req.body;
+  const state = db.getState();
+  if (!state.telegram_connections) state.telegram_connections = [];
+
+  let conn = state.telegram_connections.find(c => c.user_id === user_id);
+  if (!conn) {
+    conn = {
+      id: `tg_conn_${user_id}`,
+      user_id,
+      telegram_user_id: String(Math.floor(100000000 + Math.random() * 900000000)),
+      telegram_username: telegram_username || 'socio_covo',
+      is_connected: true,
+      connected_at: new Date().toISOString(),
+    };
+    state.telegram_connections.push(conn);
+  } else {
+    conn.telegram_user_id = conn.telegram_user_id || String(Math.floor(100000000 + Math.random() * 900000000));
+    conn.telegram_username = telegram_username || 'socio_covo';
+    conn.is_connected = true;
+    conn.connected_at = new Date().toISOString();
+  }
+
+  db.save();
+  res.json({ success: true, connection: conn });
+});
+
+apiRouter.post('/notifications/telegram/disconnect', (req: Request, res: Response) => {
+  const { user_id } = req.body;
+  const state = db.getState();
+  const conn = (state.telegram_connections || []).find(c => c.user_id === user_id);
+
+  if (conn) {
+    conn.is_connected = false;
+    conn.telegram_user_id = undefined;
+    conn.telegram_username = undefined;
+    db.save();
+  }
+
+  res.json({ success: true, message: 'Account Telegram scollegato.' });
+});
+
+// WhatsApp Opt-in & Connection
+apiRouter.post('/notifications/whatsapp/opt-in', (req: Request, res: Response) => {
+  const { user_id, phone_number, is_opted_in } = req.body;
+  const state = db.getState();
+  if (!state.whatsapp_connections) state.whatsapp_connections = [];
+
+  let conn = state.whatsapp_connections.find(c => c.user_id === user_id);
+  if (!conn) {
+    conn = {
+      id: `wa_conn_${user_id}`,
+      user_id,
+      phone_number,
+      is_opted_in: Boolean(is_opted_in),
+      opted_in_at: is_opted_in ? new Date().toISOString() : undefined,
+    };
+    state.whatsapp_connections.push(conn);
+  } else {
+    conn.phone_number = phone_number || conn.phone_number;
+    conn.is_opted_in = Boolean(is_opted_in);
+    if (is_opted_in) conn.opted_in_at = new Date().toISOString();
+  }
+
+  db.save();
+  res.json({ success: true, connection: conn });
+});
+
+// ==========================================
+// 14. PRESENCE SYSTEM ("SONO AL LOCALE")
+// ==========================================
+
+apiRouter.get('/presences', (_req: Request, res: Response) => {
+  const state = db.getState();
+  const now = new Date().toISOString();
+  // Filter active presences where expected_until > now and status !== 'ended'
+  const active = (state.user_presences || []).filter(
+    p => p.status !== 'ended' && p.expected_until > now
+  );
+  res.json(active);
+});
+
+apiRouter.post('/presences', async (req: Request, res: Response) => {
+  const { user_id, user_name, expected_hours, expected_until, notes } = req.body;
+  if (!user_id || !user_name) {
+    return res.status(400).json({ error: 'Dati utente obbligatori.' });
+  }
+
+  const state = db.getState();
+  if (!state.user_presences) state.user_presences = [];
+
+  // End any previously active presence for this user
+  state.user_presences.forEach(p => {
+    if (p.user_id === user_id && p.status !== 'ended') {
+      p.status = 'ended';
+      p.ended_at = new Date().toISOString();
+    }
+  });
+
+  const hours = Number(expected_hours) || 2;
+  const calculatedUntil = expected_until || new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+
+  const newPresence: UserPresence = {
+    id: `pres_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+    user_id,
+    user_name,
+    status: 'active',
+    started_at: new Date().toISOString(),
+    expected_until: calculatedUntil,
+    notes,
+  };
+
+  state.user_presences.unshift(newPresence);
+  db.save();
+
+  db.addAuditLog({
+    user_id,
+    user_name,
+    category: 'venue',
+    action: 'Presenza al locale registrata',
+    details: `${user_name} ha registrato la propria presenza al locale fino alle ${new Date(calculatedUntil).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`,
+  });
+
+  // EMIT EVENT: USER_PRESENCE_STARTED
+  const timeFormatted = new Date(calculatedUntil).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  await notificationService.emitEvent({
+    type: 'USER_PRESENCE_STARTED',
+    category: 'presence',
+    priority: 'normal',
+    title: `🟢 ${user_name} è al locale`,
+    message: `${user_name} è al locale (permanenza prevista fino alle ${timeFormatted}). ${notes ? `Note: "${notes}"` : ''}`,
+    target_type: 'all',
+    actor_id: user_id,
+    actor_name: user_name,
+    channels_override: ['in_app', 'web_push', 'telegram', 'whatsapp'],
+  });
+
+  res.status(201).json(newPresence);
+});
+
+apiRouter.put('/presences/:id/extend', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { extra_hours, new_expected_until } = req.body;
+  const state = db.getState();
+  const pres = (state.user_presences || []).find(p => p.id === id);
+
+  if (!pres) return res.status(404).json({ error: 'Presenza non trovata.' });
+
+  const addedMs = (Number(extra_hours) || 1) * 60 * 60 * 1000;
+  const currentUntilMs = new Date(pres.expected_until).getTime();
+  const updatedUntil = new_expected_until || new Date(currentUntilMs + addedMs).toISOString();
+
+  pres.expected_until = updatedUntil;
+  pres.status = 'extended';
+  db.save();
+
+  const timeFormatted = new Date(updatedUntil).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+  // EMIT EVENT: USER_PRESENCE_EXTENDED
+  await notificationService.emitEvent({
+    type: 'USER_PRESENCE_EXTENDED',
+    category: 'presence',
+    priority: 'normal',
+    title: `🕐 ${pres.user_name} prolunga la presenza al locale`,
+    message: `${pres.user_name} rimane al locale fino alle ore ${timeFormatted}.`,
+    target_type: 'all',
+    actor_id: pres.user_id,
+    actor_name: pres.user_name,
+    channels_override: ['in_app', 'web_push', 'telegram'],
+  });
+
+  res.json(pres);
+});
+
+apiRouter.put('/presences/:id/end', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const state = db.getState();
+  const pres = (state.user_presences || []).find(p => p.id === id);
+
+  if (!pres) return res.status(404).json({ error: 'Presenza non trovata.' });
+
+  pres.status = 'ended';
+  pres.ended_at = new Date().toISOString();
+  db.save();
+
+  db.addAuditLog({
+    user_id: pres.user_id,
+    user_name: pres.user_name,
+    category: 'venue',
+    action: 'Fine presenza al locale',
+    details: `${pres.user_name} ha lasciato il locale`,
+  });
+
+  res.json(pres);
+});
+
+// ==========================================
+// 15. DATABASE SEED / RESET
 // ==========================================
 
 apiRouter.post('/database/seed', (_req: Request, res: Response) => {

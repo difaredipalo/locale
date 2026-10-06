@@ -40,20 +40,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(true);
       const loadedUsers = await fetchUsers();
 
-      // Check stored user session or default to Gianluca (Admin) for instant ready experience
+      // Check stored user session
       const storedId = localStorage.getItem('covo_active_user_id');
-      let found: UserProfile | undefined;
       if (storedId) {
-        found = loadedUsers.find(u => u.id === storedId && u.is_active);
-      }
-      if (!found && loadedUsers.length > 0) {
-        // default to gianluca or first admin
-        found = loadedUsers.find(u => u.role === 'admin') || loadedUsers[0];
-      }
-
-      if (found) {
-        setCurrentUser(found);
-        localStorage.setItem('covo_active_user_id', found.id);
+        const found = loadedUsers.find(u => u.id === storedId && u.is_active);
+        if (found) {
+          setCurrentUser(found);
+        } else {
+          localStorage.removeItem('covo_active_user_id');
+        }
       }
       setLoading(false);
     };

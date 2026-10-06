@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Plus,
+  Award,
+  Vote,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type {
@@ -20,6 +22,7 @@ import type {
   FinancialSummary,
   Poll,
   VenueRequest,
+  PresidentialElection,
 } from '../types/database';
 import clubBanner from '../assets/images/covo_club_banner_1791184958054.jpg';
 
@@ -31,6 +34,7 @@ interface DashboardPageProps {
   financialSummary: FinancialSummary | null;
   polls: Poll[];
   venueRequests: VenueRequest[];
+  elections: PresidentialElection[];
   onNavigate: (tab: any) => void;
   onVotePoll: (pollId: string, optionId: string) => void;
 }
@@ -43,6 +47,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   financialSummary,
   polls,
   venueRequests,
+  elections,
   onNavigate,
   onVotePoll,
 }) => {
@@ -75,6 +80,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
   // Pending venue requests count
   const pendingRequests = venueRequests.filter(r => r.status === 'pending');
+
+  // Active presidential election
+  const activeElection = (elections || []).find(e => e.status === 'active');
+  const hasVotedElection = activeElection && currentUser
+    ? activeElection.voter_ids.includes(currentUser.id)
+    : false;
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -148,6 +159,38 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           >
             <span>Gestisci</span>
             <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* ACTIVE PRESIDENTIAL ELECTION BANNER */}
+      {activeElection && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 shadow-md gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Award className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-bold text-white text-sm flex items-center gap-2">
+                <span>{activeElection.title}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded border font-semibold ${
+                  hasVotedElection ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                }`}>
+                  {hasVotedElection ? '✓ Scheda Depositata' : '● Votazione in Corso'}
+                </span>
+              </div>
+              <div className="text-slate-300 text-[11px] mt-0.5">
+                Seggio aperto fino al {activeElection.end_date} · Solo voto diretto, nessun campo testuale ammesso.
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate('elections')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shrink-0 shadow-sm self-start sm:self-center"
+          >
+            <Vote className="w-4 h-4" />
+            <span>{hasVotedElection ? 'Vedi Seggio & Affluenza' : 'Vota il Presidente'}</span>
           </button>
         </div>
       )}

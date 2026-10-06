@@ -156,6 +156,16 @@ export const AuthModal: React.FC = () => {
         {/* LOGIN FORM */}
         {tab === 'login' && (
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
+            <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-[11px] text-slate-300 space-y-1">
+              <div className="font-semibold text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Come si fa l'accesso?</span>
+              </div>
+              <p className="text-slate-400 leading-relaxed">
+                Puoi accedere inserendo il tuo username (es. <strong className="text-slate-200">gianluca</strong>, <strong className="text-slate-200">marco</strong>, <strong className="text-slate-200">sofia</strong>, <strong className="text-slate-200">luca</strong>) o la tua email con la relativa password, oppure cliccare direttamente su un account demo in basso.
+              </p>
+            </div>
+
             <div>
               <label className="block text-slate-300 font-medium mb-1">Username o Email</label>
               <div className="relative">
